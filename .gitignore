@@ -48,4 +48,4 @@ htmlcov/
 *.log
 
 # Godot
-.godot/
+**/.godot/
