@@ -37,6 +37,8 @@ def _load_robot_params():
         'R':                  cfg.get('radius',   0.0318),
         'baseline':           cfg.get('baseline', 0.1),
         'encoder_resolution': 135,
+        'k_heading':          cfg.get('k_heading', 0.5),
+        'max_omega_straight': min(float(cfg.get('max_omega', 3.0)), 1.2),
     }
 
 app = Flask(__name__)
@@ -113,11 +115,11 @@ class OdometryState:
 
 class PIDStateTracker:
     def __init__(self):
-        self.prev_e = 0.0
+        self.prev_e = float('nan')
         self.prev_int = 0.0
 
     def reset(self):
-        self.prev_e = 0.0
+        self.prev_e = float('nan')
         self.prev_int = 0.0
 
 
@@ -231,9 +233,12 @@ def _turn_to(target_rad, stop_ev, tolerance_deg=5.0, timeout=12.0):
     time.sleep(0.3)
 
 
-def _drive_segment(side_length, stop_ev, timeout=15.0):
+def _drive_segment(side_length, stop_ev, heading_ref=None, timeout=15.0):
+    """Drive straight in odometry frame. If heading_ref is set, P-correct yaw (square sides)."""
     start_x, start_y = odometry.x, odometry.y
     deadline = time.time() + timeout
+    k_h = robot_params['k_heading']
+    w_cap = robot_params['max_omega_straight']
 
     while not stop_ev.is_set() and time.time() < deadline:
         update_odometry_and_path()
@@ -248,8 +253,18 @@ def _drive_segment(side_length, stop_ev, timeout=15.0):
         if 0.0 < abs(speed) < 0.15:
             speed = 0.15 if error > 0 else 0.0
 
+        if heading_ref is not None:
+            e_h = np.arctan2(
+                np.sin(float(heading_ref) - odometry.theta),
+                np.cos(float(heading_ref) - odometry.theta),
+            )
+            omega = float(np.clip(k_h * e_h, -w_cap, w_cap))
+            left_pwm, right_pwm = pwm_from_velocity(speed, omega)
+        else:
+            left_pwm, right_pwm = speed, speed
+
         if wheels:
-            wheels.set_wheels_speed(speed, speed)
+            wheels.set_wheels_speed(left_pwm, right_pwm)
 
         time.sleep(CONTROL_DT)
 
@@ -378,7 +393,7 @@ def run_square(side, stop_ev):
         with status_lock:
             status['message'] = f'Side {i + 1}/4: turning to {np.rad2deg(target_rad):.0f}°'
 
-        _turn_to(target_rad, stop_ev, tolerance_deg=5.0)
+        _turn_to(target_rad, stop_ev, tolerance_deg=3.0)
 
         if stop_ev.is_set():
             break
@@ -386,7 +401,7 @@ def run_square(side, stop_ev):
         with status_lock:
             status['message'] = f'Side {i + 1}/4: driving {side} m'
 
-        _drive_segment(side, stop_ev)
+        _drive_segment(side, stop_ev, heading_ref=target_rad)
 
     if wheels:
         wheels.set_wheels_speed(0, 0)
