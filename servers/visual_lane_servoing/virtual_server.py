@@ -109,17 +109,23 @@ def get_hsv():
 def update_hsv():
     data = request.json
     mod = _get_student_module()
-    current = mod.get_hsv_bounds()
-    current.update({k: int(v) for k, v in data.items()})
+    merged = {}
+    try:
+        with open(LANE_HSV_CONFIG_FILE, 'r') as f:
+            merged = yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        pass
+    merged.update(mod.get_hsv_bounds())
+    merged.update({k: int(v) for k, v in data.items()})
     mod.set_hsv_bounds(
-        [current['yellow_lower_h'], current['yellow_lower_s'], current['yellow_lower_v']],
-        [current['yellow_upper_h'], current['yellow_upper_s'], current['yellow_upper_v']],
-        [current['white_lower_h'],  current['white_lower_s'],  current['white_lower_v']],
-        [current['white_upper_h'],  current['white_upper_s'],  current['white_upper_v']],
+        [merged['yellow_lower_h'], merged['yellow_lower_s'], merged['yellow_lower_v']],
+        [merged['yellow_upper_h'], merged['yellow_upper_s'], merged['yellow_upper_v']],
+        [merged['white_lower_h'],  merged['white_lower_s'],  merged['white_lower_v']],
+        [merged['white_upper_h'],  merged['white_upper_s'],  merged['white_upper_v']],
     )
     try:
         with open(LANE_HSV_CONFIG_FILE, 'w') as f:
-            yaml.dump(current, f, default_flow_style=False)
+            yaml.dump(merged, f, default_flow_style=False)
     except Exception as e:
         print(f"[LaneServoing] Could not save HSV config: {e}")
     return jsonify({'status': 'ok'})

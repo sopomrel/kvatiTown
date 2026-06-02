@@ -2,10 +2,22 @@ from typing import List, Tuple
 import numpy as np
 
 
-def detect_curve(yellow_xs: List[int],white_xs:  List[int],curve_threshold: int = 350,
-    ) -> Tuple[bool, int]:
-    # Hint: xs[0] is the position closest to the robot, xs[-1] is farther ahead.
-    # If the line shifts by more than curve_threshold pixels between near and far,
-    # the road is curving. The sign of the shift tells you which way.
-        return False, 0
-        #ToDo (optional) may help with high speed 
+def detect_curve(
+    yellow_xs: List[int],
+    white_xs: List[int],
+    curve_threshold: int = 350,
+) -> Tuple[bool, int]:
+    # # Slices are built from top-of-ROI to bottom-of-ROI; xs[-1] is the row nearer
+    # # the robot, xs[0] is farther along the lane. Large |near - far| => curve.
+    # shifts: List[int] = []
+    # if len(yellow_xs) >= 2:
+    #     shifts.append(int(yellow_xs[-1] - yellow_xs[0]))
+    # if len(white_xs) >= 2:
+    #     shifts.append(int(white_xs[-1] - white_xs[0]))
+    # if not shifts:
+    #     return False, 0
+
+    # shift = int(round(sum(shifts) / len(shifts)))
+    # if abs(shift) <= curve_threshold:
+    #     return False, 0
+    return False, 0

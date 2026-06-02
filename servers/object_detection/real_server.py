@@ -40,6 +40,8 @@ _last_detections = []
 _detection_lock  = threading.Lock()
 _stopped_by_det  = False
 _stop_reason     = ''
+_stop_streak     = 0
+STOP_CONFIRM_FRAMES = 2
 
 keys_pressed      = {'up': False, 'down': False, 'left': False, 'right': False}
 _keys_lock        = threading.Lock()
@@ -95,12 +97,12 @@ def detection_loop():
                 _last_detections = result
 
 
-def _should_stop(detections, frame_h: int):
-    return student_should_stop(detections, frame_h)
+def _should_stop(detections, img_w: int, img_h: int):
+    return student_should_stop(detections, img_w, img_h)
 
 
 def visualize(frame_bgr):
-    global _stopped_by_det, _stop_reason
+    global _stopped_by_det, _stop_reason, _stop_streak
 
     if wheels is None:
         return draw_status_overlay(frame_bgr, 'Initializing...')
@@ -121,12 +123,19 @@ def visualize(frame_bgr):
     if manual_mode:
         _stopped_by_det = False
         _stop_reason    = ''
+        _stop_streak    = 0
     elif lane_agent is not None:
         pwm_left, pwm_right = lane_agent.compute_commands(frame_rgb)
 
-        should_stop, reason = _should_stop(detections, det_agent.img_size if det_agent else frame_bgr.shape[0])
+        oh, ow = frame_bgr.shape[0], frame_bgr.shape[1]
+        should_raw, reason_raw = _should_stop(detections, ow, oh)
+        if should_raw:
+            _stop_streak += 1
+        else:
+            _stop_streak = 0
+        should_stop = _stop_streak >= STOP_CONFIRM_FRAMES
         _stopped_by_det = should_stop
-        _stop_reason    = reason
+        _stop_reason    = reason_raw if should_stop else ''
 
         if running and not should_stop:
             wheels.set_wheels_speed(pwm_left, pwm_right)

@@ -40,6 +40,8 @@ _last_detections = []
 _detection_lock  = threading.Lock()
 _stopped_by_det  = False
 _stop_reason     = ''
+_stop_streak     = 0
+STOP_CONFIRM_FRAMES = 2  # consecutive frames before cutting motors (reduces flicker stops)
 
 keys_pressed     = {'up': False, 'down': False, 'left': False, 'right': False}
 _keys_lock       = threading.Lock()
@@ -99,14 +101,14 @@ def manual_control_loop():
         time.sleep(0.05)
 
 
-def _should_stop(detections):
+def _should_stop(detections, img_w: int, img_h: int):
     if det_agent is None:
         return False, ''
-    return student_should_stop(detections, det_agent.img_size)
+    return student_should_stop(detections, img_w, img_h)
 
 
 def visualize(frame_rgb):
-    global _stopped_by_det, _stop_reason
+    global _stopped_by_det, _stop_reason, _stop_streak
 
     bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
 
@@ -127,12 +129,19 @@ def visualize(frame_rgb):
     if manual_mode:
         _stopped_by_det = False
         _stop_reason    = ''
+        _stop_streak    = 0
     elif lane_agent is not None:
         pwm_left, pwm_right = lane_agent.compute_commands(frame_rgb)
 
-        should_stop_flag, reason = _should_stop(detections)
+        oh, ow = frame_rgb.shape[0], frame_rgb.shape[1]
+        should_raw, reason_raw = _should_stop(detections, ow, oh)
+        if should_raw:
+            _stop_streak += 1
+        else:
+            _stop_streak = 0
+        should_stop_flag = _stop_streak >= STOP_CONFIRM_FRAMES
         _stopped_by_det = should_stop_flag
-        _stop_reason    = reason
+        _stop_reason    = reason_raw if should_stop_flag else ''
 
         if running and not should_stop_flag and not wheels.is_game_over():
             wheels.set_wheels_speed(pwm_left, pwm_right)
@@ -177,11 +186,12 @@ def stop():
 
 @app.route('/reset', methods=['POST'])
 def reset():
-    global _stopped_by_det, _stop_reason, _last_detections, running
+    global _stopped_by_det, _stop_reason, _last_detections, running, _stop_streak
     if wheels:
         wheels.reset_game()
     _stopped_by_det = False
     _stop_reason    = ''
+    _stop_streak    = 0
     running         = True
     with _detection_lock:
         _last_detections = []
@@ -226,12 +236,13 @@ def update_keys():
 
 @app.route('/remove_objects', methods=['POST'])
 def remove_objects():
-    global _stopped_by_det, _stop_reason, _last_detections
+    global _stopped_by_det, _stop_reason, _last_detections, _stop_streak
     name_filter = request.json.get('filter', '') if request.json else ''
     if wheels and name_filter:
         wheels.remove_objects(name_filter)
     _stopped_by_det = False
     _stop_reason    = ''
+    _stop_streak    = 0
     with _detection_lock:
         _last_detections = []
     return jsonify({'status': 'ok', 'filter': name_filter})

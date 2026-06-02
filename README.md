@@ -133,7 +133,8 @@ The camera feed is a standard MJPEG stream served at `/video`. The browser displ
 
 **Reading state**
 
-The interface polls `/status` every few hundred milliseconds with a GET request. The server responds with a JSON object containing the current pose, frame count, active maneuver, or whatever is relevant for the task. The page updates the displayed values from this response.
+The interface polls `/status` every few hundred milliseconds with a GET request. The server responds with a JSON object containing the current po
+se, frame count, active maneuver, or whatever is relevant for the task. The page updates the displayed values from this response.
 
 **Changing configuration**
 

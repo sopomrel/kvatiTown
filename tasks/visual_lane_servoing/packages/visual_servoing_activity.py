@@ -18,7 +18,38 @@ _white_lower = np.array([_h.get('white_lower_h', 0),   _h.get('white_lower_s', 0
 _white_upper = np.array([_h.get('white_upper_h', 0), _h.get('white_upper_s', 0), _h.get('white_upper_v', 0)])
 
 def detect_lane_markings(image: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    raise NotImplementedError("TODO: Implement this function")
+    """BGR in → binary float masks (0/1) for left (yellow) and right (white) lane paint."""
+    h, w = image.shape[:2]
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    hsv = cv2.GaussianBlur(hsv, (5, 5), 0)
+
+    raw_yellow = cv2.inRange(hsv, _yellow_lower, _yellow_upper)
+    raw_white = cv2.inRange(hsv, _white_lower, _white_upper)
+
+    mid = w // 2
+    mask_left_half = np.zeros((h, w), dtype=np.uint8)
+    mask_left_half[:, :mid] = 255
+    mask_right_half = np.zeros((h, w), dtype=np.uint8)
+    mask_right_half[:, mid:] = 255
+
+    yellow = cv2.bitwise_and(raw_yellow, mask_left_half)
+    white = cv2.bitwise_and(raw_white, mask_right_half)
+
+    roi = np.zeros((h, w), dtype=np.uint8)
+    y0 = int(h * 0.2)
+    roi[y0:, :] = 255
+    yellow = cv2.bitwise_and(yellow, roi)
+    white = cv2.bitwise_and(white, roi)
+
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    yellow = cv2.morphologyEx(yellow, cv2.MORPH_OPEN, kernel)
+    white = cv2.morphologyEx(white, cv2.MORPH_OPEN, kernel)
+    yellow = cv2.morphologyEx(yellow, cv2.MORPH_CLOSE, kernel)
+    white = cv2.morphologyEx(white, cv2.MORPH_CLOSE, kernel)
+
+    left = (yellow > 0).astype(np.float32)
+    right = (white > 0).astype(np.float32)
+    return left, right
 
 
 
